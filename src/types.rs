@@ -1,18 +1,18 @@
+use crate::errors::{ParquetError, ParquetResult};
+use crate::thrift_defined::rosetta::*;
+use crate::thrift_defined::*;
 use std::rc::Rc;
 use std::sync::Arc;
-use crate::thrift_utils::parquet_format::SchemaElement;
-use crate::errors::{ParquetError, ParquetResult};
-use crate::thrift_utils::rosetta::*;
 
 /// Basic type info. This contains information such as the name of the type,
 /// the repetition level, the logical type and the kind of the type (group, primitive).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeInfo {
-    name: String,
+    pub name: String,
     pub repetition: Option<Repetition>,
-    converted_type: Option<ConvertedType>,
-    logical_type: Option<LogicalType>,
-    id: Option<i32>
+    pub converted_type: Option<ConvertedType>,
+    pub logical_type: Option<LogicalType>,
+    pub id: Option<i32>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -22,25 +22,25 @@ pub enum ParquetType {
         physical: PhysicalType,
         type_length: i32,
         scale: i32,
-        precision: i32
+        precision: i32,
     },
     Group {
         info: TypeInfo,
-        fields: Vec<ParquetType>
-    }
+        fields: Vec<ParquetType>,
+    },
 }
 
 impl ParquetType {
     fn is_group(&self) -> bool {
-        matches!(self, Self::Group {..})
+        matches!(self, Self::Group { .. })
     }
     fn is_primitive(&self) -> bool {
-        matches!(self, Self::Primitive {..})
+        matches!(self, Self::Primitive { .. })
     }
     fn leaves(&self) -> usize {
         match self {
-            Self::Group {fields, ..} => fields.len(),
-            Self::Primitive {..} => 0
+            Self::Group { fields, .. } => fields.len(),
+            Self::Primitive { .. } => 0,
         }
     }
     pub fn fields(&self) -> &[ParquetType] {
@@ -55,15 +55,21 @@ impl ParquetType {
             Self::Group { info, .. } => info,
         }
     }
+    fn physical_type(&self) -> PhysicalType {
+        match self {
+            Self::Primitive { physical, .. } => *physical,
+            _ => panic!("Expected primitive type"),
+        }
+    }
 }
 
 /// Represents a path in a nested schema
 #[derive(Clone, PartialEq, Debug, Eq, Hash)]
 pub struct ColumnPath {
-    parts: Vec<String>,
+    pub(crate) parts: Vec<String>,
 }
 
-#[derive(Debug,  Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ColumnDescriptor {
     // The "leaf" primitive type of this column
     primitive_type: ParquetType,
@@ -75,6 +81,26 @@ pub struct ColumnDescriptor {
     path: ColumnPath,
 }
 pub type ColumnDescriptorPtr = Rc<ColumnDescriptor>;
+
+impl ColumnDescriptor {
+    pub fn converted_type(&self) -> Option<&ConvertedType> {
+        self.primitive_type.info().converted_type.as_ref()
+    }
+
+    /// Returns [`LogicalType`](crate::basic::LogicalType) for this column.
+    pub fn logical_type(&self) -> Option<&LogicalType> {
+        self.primitive_type.info().logical_type.as_ref()
+    }
+
+    /// Returns physical type for this column.
+    /// Note that it will panic if called on a non-primitive type.
+    pub fn physical_type(&self) -> PhysicalType {
+        match self.primitive_type {
+            ParquetType::Primitive { physical, .. } => physical,
+            _ => unreachable!(),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct SchemaDescriptor {
@@ -91,6 +117,7 @@ pub struct SchemaDescriptor {
     // -- -- -- -- d
     pub(crate) leaf_to_base: Vec<usize>,
 }
+pub type SchemaDescriptorPtr = Rc<SchemaDescriptor>;
 
 impl SchemaDescriptor {
     pub(crate) fn new(schema_root: ParquetType) -> SchemaDescriptor {
@@ -99,8 +126,9 @@ impl SchemaDescriptor {
         let mut leaves = Vec::with_capacity(schema_root.leaves());
         let mut leaf_to_base = vec![];
         for (root_idx, field) in schema_root.fields().iter().enumerate() {
-            build_tree(field,
-                     root_idx,
+            build_tree(
+                field,
+                root_idx,
                 0,
                 0,
                 &mut leaves,
@@ -111,7 +139,7 @@ impl SchemaDescriptor {
         SchemaDescriptor {
             schema: schema_root,
             leaves,
-            leaf_to_base
+            leaf_to_base,
         }
     }
 }
@@ -123,7 +151,7 @@ fn build_tree<'a>(
     mut max_def_level: i16,
     leaves: &mut Vec<ColumnDescriptorPtr>,
     leaf_to_base: &mut Vec<usize>,
-    path_so_far: &mut Vec<&'a str>
+    path_so_far: &mut Vec<&'a str>,
 ) {
     let info = tp.info();
     debug_assert!(info.repetition.is_some());
@@ -134,23 +162,34 @@ fn build_tree<'a>(
         Repetition::Repeated => {
             max_def_level += 1;
             max_rep_level += 1;
-        },
+        }
         Repetition::Required => {}
     }
     use ParquetType::*;
     match tp {
-        Primitive {..} => {
-            let path = path_so_far.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        Primitive { .. } => {
+            let path = path_so_far
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>();
             leaves.push(Rc::new(ColumnDescriptor {
                 primitive_type: tp.clone(),
                 max_def_level,
                 max_rep_level,
-                path: ColumnPath{parts: path}
+                path: ColumnPath { parts: path },
             }))
         }
-        Group {fields, ..} => {
+        Group { fields, .. } => {
             for field in fields {
-                build_tree(field, root_idx, max_rep_level, max_def_level, leaves, leaf_to_base, path_so_far);
+                build_tree(
+                    field,
+                    root_idx,
+                    max_rep_level,
+                    max_def_level,
+                    leaves,
+                    leaf_to_base,
+                    path_so_far,
+                );
                 path_so_far.pop();
             }
         }
@@ -160,14 +199,16 @@ fn build_tree<'a>(
 pub(super) fn from_thrift(elements: &[SchemaElement]) -> ParquetResult<ParquetType> {
     let (index, parquet_type) = from_thrift_helper(elements, 0)?;
     if index != elements.len() {
-        return Err(ParquetError::InvalidFormat("Expected exactly one root node, but found more.".into()));
+        return Err(ParquetError::InvalidFormat(
+            "Expected exactly one root node, but found more.".into(),
+        ));
     }
     Ok(parquet_type)
 }
 
 fn from_thrift_helper(
     elements: &[SchemaElement],
-    index: usize
+    index: usize,
 ) -> ParquetResult<(usize, ParquetType)> {
     // Whether or not the current node is root (message type).
     // There is only one message type node in the schema tree.
@@ -178,8 +219,12 @@ fn from_thrift_helper(
     // LogicalType is only present in v2 Parquet files. ConvertedType is always
     // populated, regardless of the version of the file (v1 or v2).
 
-    let logical_type: Option<LogicalType> = element.logical_type.as_ref().map(|lt|lt.clone().into());
-    let mut repetition = element.repetition_type.map(|r| Repetition::try_from(r)).transpose()?;
+    let logical_type: Option<LogicalType> =
+        element.logical_type.as_ref().map(|lt| lt.clone().into());
+    let mut repetition = element
+        .repetition_type
+        .map(|r| Repetition::try_from(r))
+        .transpose()?;
 
     let type_info = TypeInfo {
         name: element.name.clone(),
@@ -196,7 +241,9 @@ fn from_thrift_helper(
         // have to handle this case too.
         None | Some(0) => {
             if repetition.is_none() {
-                return Err(ParquetError::InvalidFormat("Repetition level must be defined for a primitive type".into()))
+                return Err(ParquetError::InvalidFormat(
+                    "Repetition level must be defined for a primitive type".into(),
+                ));
             }
             let physical_type = PhysicalType::try_from(element.type_.unwrap())?;
             let type_length = element.type_length.unwrap_or(-1);
@@ -208,19 +255,20 @@ fn from_thrift_helper(
                 physical: physical_type,
                 type_length,
                 scale,
-                precision
+                precision,
             };
 
             Ok((index + 1, parquet_type))
-        },
+        }
         Some(n) => {
-
             let mut current_index = index + 1;
-            let children = (0..n).map(|_| {
-                let (index, tp) = from_thrift_helper(elements, current_index)?;
-                current_index = index;
-                Ok(tp)
-            }).collect::<ParquetResult<Vec<_>>>()?;
+            let children = (0..n)
+                .map(|_| {
+                    let (index, tp) = from_thrift_helper(elements, current_index)?;
+                    current_index = index;
+                    Ok(tp)
+                })
+                .collect::<ParquetResult<Vec<_>>>()?;
 
             // Sometimes parquet-cpp and parquet-mr set repetition level REQUIRED or
             // REPEATED for root node.

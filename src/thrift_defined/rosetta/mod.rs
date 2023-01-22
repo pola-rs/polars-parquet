@@ -1,7 +1,12 @@
 //! Contains Rust mappings for Thrift definition.
 //! Refer to `parquet_format.rs` file to see raw auto-gen definitions.
 
-use crate::thrift_utils::parquet_format::TimeUnit;
+mod metadata;
+
+use crate::thrift_defined::parquet_format::TimeUnit;
+use crate::thrift_defined::SortingColumn;
+use crate::types::ParquetType;
+pub use metadata::*;
 
 /// Types supported by Parquet.  These types are intended to be used in combination
 /// with the encodings to control the on disk storage format.
@@ -79,7 +84,7 @@ pub enum ConvertedType {
     /// the number of days associated with the duration and the third identifies
     /// the number of milliseconds associated with the provided duration.
     /// This duration of time is independent of any particular timezone or date.
-    Interval
+    Interval,
 }
 /// Logical types used by version 2.4.0+ of the Parquet format.
 ///
@@ -180,7 +185,7 @@ pub enum Encoding {
     /// the streams are concatenated.
     /// This itself does not reduce the size of the data but can lead to better compression
     /// afterwards.
-    ByteStreamSplit
+    ByteStreamSplit,
 }
 
 pub enum PageType {
@@ -188,4 +193,149 @@ pub enum PageType {
     IndexPage,
     DictionaryPage,
     DataPageV2,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Compression {
+    Uncompressed,
+    Snappy,
+    Gzip,
+    Lzo,
+    Brotli,
+    Lz4,
+    Zstd,
+    Lz4Raw,
+}
+
+/// Sort order for page and column statistics.
+///
+/// Types are associated with sort orders and column stats are aggregated using a sort
+/// order, and a sort order should be considered when comparing values with statistics
+/// min/max.
+///
+/// See reference in
+/// <https://github.com/apache/parquet-cpp/blob/master/src/parquet/types.h>
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortOrder {
+    /// Signed (either value or legacy byte-wise) comparison.
+    Signed,
+    /// Unsigned (depending on physical type either value or byte-wise) comparison.
+    Unsigned,
+    /// Comparison is undefined.
+    Undefined,
+}
+
+impl SortOrder {
+    pub fn is_signed(&self) -> bool {
+        matches!(self, Self::Signed)
+    }
+}
+
+/// Column order that specifies what method was used to aggregate min/max values for
+/// statistics.
+///
+/// If column order is undefined, then it is the legacy behaviour and all values should
+/// be compared as signed values/bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColumnOrder {
+    /// Column uses the order defined by its logical or physical type
+    /// (if there is no logical type), parquet-format 2.4.0+.
+    TypeDefinedOrder(SortOrder),
+    /// Undefined column order, means legacy behaviour before parquet-format 2.4.0.
+    /// Sort order is always SIGNED.
+    Undefined,
+}
+
+impl ColumnOrder {
+    /// Returns sort order for a physical/logical type.
+    pub fn get_sort_order(
+        logical_type: Option<&LogicalType>,
+        converted_type: Option<&ConvertedType>,
+        physical_type: PhysicalType,
+    ) -> SortOrder {
+        // TODO: Should this take converted and logical type, for compatibility?
+        match logical_type {
+            Some(logical) => match logical {
+                LogicalType::String | LogicalType::Enum | LogicalType::Json | LogicalType::Bson => {
+                    SortOrder::Unsigned
+                }
+                LogicalType::Integer { is_signed, .. } => match is_signed {
+                    true => SortOrder::Signed,
+                    false => SortOrder::Unsigned,
+                },
+                LogicalType::Map | LogicalType::List => SortOrder::Undefined,
+                LogicalType::Decimal { .. } => SortOrder::Signed,
+                LogicalType::Date => SortOrder::Signed,
+                LogicalType::Time { .. } => SortOrder::Signed,
+                LogicalType::Timestamp { .. } => SortOrder::Signed,
+                LogicalType::Unknown => SortOrder::Undefined,
+                LogicalType::Uuid => SortOrder::Unsigned,
+            },
+            // Fall back to converted type
+            None => Self::get_converted_sort_order(converted_type, physical_type),
+        }
+    }
+
+    fn get_converted_sort_order(
+        converted_type: Option<&ConvertedType>,
+        physical_type: PhysicalType,
+    ) -> SortOrder {
+        match converted_type {
+            None => Self::get_default_sort_order(physical_type),
+            Some(converted_type) => {
+                match converted_type {
+                    // Unsigned byte-wise comparison.
+                    ConvertedType::Utf8
+                    | ConvertedType::Json
+                    | ConvertedType::Bson
+                    | ConvertedType::Enum => SortOrder::Unsigned,
+
+                    ConvertedType::Int8
+                    | ConvertedType::Int16
+                    | ConvertedType::Int32
+                    | ConvertedType::Int64 => SortOrder::Signed,
+
+                    ConvertedType::UInt8
+                    | ConvertedType::UInt16
+                    | ConvertedType::UInt32
+                    | ConvertedType::UInt64 => SortOrder::Unsigned,
+
+                    // Signed comparison of the represented value.
+                    ConvertedType::Decimal => SortOrder::Signed,
+
+                    ConvertedType::Date => SortOrder::Signed,
+
+                    ConvertedType::TimeMillis
+                    | ConvertedType::TimeMicros
+                    | ConvertedType::TimeStampMillis
+                    | ConvertedType::TimeStampMicros => SortOrder::Signed,
+
+                    ConvertedType::Interval => SortOrder::Undefined,
+
+                    ConvertedType::List | ConvertedType::Map | ConvertedType::MapKeyValue => {
+                        SortOrder::Undefined
+                    }
+                }
+            }
+        }
+    }
+
+    fn get_default_sort_order(physical_type: PhysicalType) -> SortOrder {
+        use PhysicalType::*;
+        match physical_type {
+            // Order: false, true
+            Boolean => SortOrder::Unsigned,
+            Int32 | Int64 => SortOrder::Signed,
+            Int96 => SortOrder::Undefined,
+            // Notes to remember when comparing float/double values:
+            // If the min is a NaN, it should be ignored.
+            // If the max is a NaN, it should be ignored.
+            // If the min is +0, the row group may contain -0 values as well.
+            // If the max is -0, the row group may contain +0 values as well.
+            // When looking for NaN values, min and max should be ignored.
+            Float | Double => SortOrder::Signed,
+            // Unsigned byte-wise comparison
+            ByteArray | FixedLenByteArray => SortOrder::Unsigned,
+        }
+    }
 }

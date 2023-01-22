@@ -1,4 +1,3 @@
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statistics {
     Boolean(ValueStatistics<bool>),
@@ -7,12 +6,13 @@ pub enum Statistics {
     Int96(ValueStatistics<i128>),
     Float(ValueStatistics<f32>),
     Double(ValueStatistics<f64>),
-    ByteArray(ValueStatistics<ByteArray>),
-    FixedLenByteArray(ValueStatistics<FixedLenByteArray>),
+    // Maybe support these later
+    // ByteArray(ValueStatistics<ByteArray>),
+    // FixedLenByteArray(ValueStatistics<FixedLenByteArray>),
 }
 
-#[derive(Clone, Eq, PartialEq)]
 /// Statistics for a particular `ParquetValueType`
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ValueStatistics<T> {
     min: Option<T>,
     max: Option<T>,

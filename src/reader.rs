@@ -1,6 +1,6 @@
+use crate::errors::{ParquetError, ParquetResult};
 use std::fs::File;
 use std::io::Read;
-use crate::errors::{ParquetError, ParquetResult};
 
 pub trait ParquetReader: Send + Sync {
     /// Get the length in bytes from the source
@@ -12,7 +12,6 @@ pub trait ParquetReader: Send + Sync {
 }
 
 impl ParquetReader for Vec<u8> {
-
     fn len(&self) -> usize {
         Vec::len(self)
     }

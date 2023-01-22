@@ -1,5 +1,6 @@
-use crate::errors::ParquetError;
 use super::*;
+use crate::errors::ParquetError;
+use crate::thrift_defined::parquet_format::{ColumnChunk, RowGroup};
 
 impl From<parquet_format::ConvertedType> for rosetta::ConvertedType {
     fn from(tp: parquet_format::ConvertedType) -> Self {
@@ -17,18 +18,18 @@ impl From<parquet_format::ConvertedType> for rosetta::ConvertedType {
             parquet_format::ConvertedType::TIME_MICROS => TimeMicros,
             parquet_format::ConvertedType::TIMESTAMP_MILLIS => TimeStampMillis,
             parquet_format::ConvertedType::TIMESTAMP_MICROS => TimeStampMicros,
-            parquet_format::ConvertedType::UINT_8 =>  UInt8,
+            parquet_format::ConvertedType::UINT_8 => UInt8,
             parquet_format::ConvertedType::UINT_16 => UInt16,
             parquet_format::ConvertedType::UINT_32 => UInt32,
             parquet_format::ConvertedType::UINT_64 => UInt64,
-            parquet_format::ConvertedType::INT_8 =>  Int8,
+            parquet_format::ConvertedType::INT_8 => Int8,
             parquet_format::ConvertedType::INT_16 => Int16,
             parquet_format::ConvertedType::INT_32 => Int32,
             parquet_format::ConvertedType::INT_64 => Int64,
             parquet_format::ConvertedType::JSON => Json,
             parquet_format::ConvertedType::BSON => Bson,
             parquet_format::ConvertedType::INTERVAL => Interval,
-            _ => todo!()
+            _ => todo!(),
         }
     }
 }
@@ -75,7 +76,11 @@ impl TryFrom<parquet_format::FieldRepetitionType> for rosetta::Repetition {
             0 => Required,
             1 => Optional,
             2 => Repeated,
-            _ => return Err(ParquetError::InvalidFormat("Repetition value should be between 0-3.".into()))
+            _ => {
+                return Err(ParquetError::InvalidFormat(
+                    "Repetition value should be between 0-3.".into(),
+                ))
+            }
         };
         Ok(out)
     }
@@ -95,9 +100,99 @@ impl TryFrom<parquet_format::Type> for rosetta::PhysicalType {
             5 => Double,
             6 => ByteArray,
             8 => FixedLenByteArray,
-            _ => return Err(ParquetError::InvalidFormat("Type value should be between 0-8.".into()))
+            _ => {
+                return Err(ParquetError::InvalidFormat(
+                    "Type value should be between 0-8.".into(),
+                ))
+            }
         };
 
         Ok(out)
     }
 }
+impl TryFrom<parquet_format::PageType> for rosetta::PageType {
+    type Error = ParquetError;
+
+    fn try_from(value: parquet_format::PageType) -> Result<Self, Self::Error> {
+        use rosetta::PageType::*;
+        let out = match value.0 {
+            0 => DataPageV1,
+            1 => IndexPage,
+            2 => DictionaryPage,
+            3 => DataPageV2,
+            _ => {
+                return Err(ParquetError::InvalidFormat(
+                    "PageType value should be between 0-3.".into(),
+                ))
+            }
+        };
+
+        Ok(out)
+    }
+}
+
+impl TryFrom<parquet_format::CompressionCodec> for rosetta::Compression {
+    type Error = ParquetError;
+
+    fn try_from(value: parquet_format::CompressionCodec) -> Result<Self, Self::Error> {
+        use rosetta::Compression::*;
+        let out = match value.0 {
+            0 => Uncompressed,
+            1 => Snappy,
+            2 => Gzip,
+            3 => Lzo,
+            4 => Brotli,
+            5 => Lz4,
+            6 => Zstd,
+            7 => Lz4Raw,
+            _ => {
+                return Err(ParquetError::InvalidFormat(
+                    "PageType value should be between 0-3.".into(),
+                ))
+            }
+        };
+
+        Ok(out)
+    }
+}
+
+impl TryFrom<parquet_format::Encoding> for rosetta::Encoding {
+    type Error = ParquetError;
+
+    fn try_from(value: parquet_format::Encoding) -> Result<Self, Self::Error> {
+        use rosetta::Encoding::*;
+        let out = match value.0 {
+            0 => Plain,
+            2 => PlainDictionary,
+            3 => RLE,
+            4 => BitPacked,
+            5 => DeltaBinaryPacked,
+            6 => DeltaLengthByteArray,
+            7 => DeltaByteArray,
+            8 => RLE_Dictionary,
+            9 => ByteStreamSplit,
+            _ => return Err(ParquetError::InvalidFormat("Invalid encoding.".into())),
+        };
+
+        Ok(out)
+    }
+}
+
+// impl From<parquet_format::RowGroup> for rosetta::RowGroupMetaData {
+//     fn from(value: parquet_format::RowGroup) -> Self {
+//         RowGroupMetaData {
+//             columns: value.columns.into_iter().map(|c| c.into()).collect(),
+//             total_byte_size: value.total_byte_size as _,
+//             num_rows: value.num_rows as _,
+//             sorting_columns: value.sorting_columns,
+//             file_offset: value.file_offset.map(|v| v as _),
+//             total_compressed_size: value.total_compressed_size.map(|v| v as _)
+//         }
+//     }
+// }
+//
+// impl From<ColumnChunk> for ColumnChunkMetaData {
+//     fn from(value: ColumnChunk) -> Self {
+//         todo!()
+//     }
+// }
