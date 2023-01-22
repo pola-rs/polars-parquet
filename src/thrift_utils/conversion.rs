@@ -1,0 +1,103 @@
+use crate::errors::ParquetError;
+use super::*;
+
+impl From<parquet_format::ConvertedType> for rosetta::ConvertedType {
+    fn from(tp: parquet_format::ConvertedType) -> Self {
+        use rosetta::ConvertedType::*;
+
+        match tp {
+            parquet_format::ConvertedType::UTF8 => Utf8,
+            parquet_format::ConvertedType::MAP => Map,
+            parquet_format::ConvertedType::MAP_KEY_VALUE => MapKeyValue,
+            parquet_format::ConvertedType::LIST => List,
+            parquet_format::ConvertedType::ENUM => Enum,
+            parquet_format::ConvertedType::DECIMAL => Decimal,
+            parquet_format::ConvertedType::DATE => Date,
+            parquet_format::ConvertedType::TIME_MILLIS => TimeMillis,
+            parquet_format::ConvertedType::TIME_MICROS => TimeMicros,
+            parquet_format::ConvertedType::TIMESTAMP_MILLIS => TimeStampMillis,
+            parquet_format::ConvertedType::TIMESTAMP_MICROS => TimeStampMicros,
+            parquet_format::ConvertedType::UINT_8 =>  UInt8,
+            parquet_format::ConvertedType::UINT_16 => UInt16,
+            parquet_format::ConvertedType::UINT_32 => UInt32,
+            parquet_format::ConvertedType::UINT_64 => UInt64,
+            parquet_format::ConvertedType::INT_8 =>  Int8,
+            parquet_format::ConvertedType::INT_16 => Int16,
+            parquet_format::ConvertedType::INT_32 => Int32,
+            parquet_format::ConvertedType::INT_64 => Int64,
+            parquet_format::ConvertedType::JSON => Json,
+            parquet_format::ConvertedType::BSON => Bson,
+            parquet_format::ConvertedType::INTERVAL => Interval,
+            _ => todo!()
+        }
+    }
+}
+
+impl From<parquet_format::LogicalType> for rosetta::LogicalType {
+    fn from(value: parquet_format::LogicalType) -> Self {
+        use rosetta::LogicalType::*;
+        match value {
+            parquet_format::LogicalType::STRING(_) => String,
+            parquet_format::LogicalType::MAP(_) => Map,
+            parquet_format::LogicalType::LIST(_) => List,
+            parquet_format::LogicalType::ENUM(_) => Enum,
+            parquet_format::LogicalType::DECIMAL(t) => Decimal {
+                scale: t.scale,
+                precision: t.precision,
+            },
+            parquet_format::LogicalType::DATE(_) => Date,
+            parquet_format::LogicalType::TIME(t) => Time {
+                is_adjusted_to_utc: t.is_adjusted_to_u_t_c,
+                unit: t.unit,
+            },
+            parquet_format::LogicalType::TIMESTAMP(t) => Timestamp {
+                is_adjusted_to_utc: t.is_adjusted_to_u_t_c,
+                unit: t.unit,
+            },
+            parquet_format::LogicalType::INTEGER(t) => Integer {
+                bit_width: t.bit_width,
+                is_signed: t.is_signed,
+            },
+            parquet_format::LogicalType::UNKNOWN(_) => Unknown,
+            parquet_format::LogicalType::JSON(_) => Json,
+            parquet_format::LogicalType::BSON(_) => Bson,
+            parquet_format::LogicalType::UUID(_) => Uuid,
+        }
+    }
+}
+
+impl TryFrom<parquet_format::FieldRepetitionType> for rosetta::Repetition {
+    type Error = ParquetError;
+
+    fn try_from(value: parquet_format::FieldRepetitionType) -> Result<Self, Self::Error> {
+        use rosetta::Repetition::*;
+        let out = match value.0 {
+            0 => Required,
+            1 => Optional,
+            2 => Repeated,
+            _ => return Err(ParquetError::InvalidFormat("Repetition value should be between 0-3.".into()))
+        };
+        Ok(out)
+    }
+}
+
+impl TryFrom<parquet_format::Type> for rosetta::PhysicalType {
+    type Error = ParquetError;
+
+    fn try_from(value: parquet_format::Type) -> Result<Self, Self::Error> {
+        use rosetta::PhysicalType::*;
+        let out = match value.0 {
+            0 => Boolean,
+            1 => Int32,
+            2 => Int64,
+            3 => Int96,
+            4 => Float,
+            5 => Double,
+            6 => ByteArray,
+            8 => FixedLenByteArray,
+            _ => return Err(ParquetError::InvalidFormat("Type value should be between 0-8.".into()))
+        };
+
+        Ok(out)
+    }
+}
