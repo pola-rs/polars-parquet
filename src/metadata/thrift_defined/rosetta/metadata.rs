@@ -1,9 +1,11 @@
 use super::*;
 use crate::errors::{ParquetError, ParquetResult};
-use crate::statistics::Statistics;
-use crate::thrift_defined::parquet_format::{ColumnChunk, RowGroup};
-use crate::thrift_defined::KeyValue;
-use crate::types::{ColumnDescriptorPtr, ColumnPath, SchemaDescriptor, SchemaDescriptorPtr};
+use crate::metadata::statistics::Statistics;
+use crate::metadata::thrift_defined::parquet_format::{ColumnChunk, RowGroup};
+use crate::metadata::thrift_defined::KeyValue;
+use crate::metadata::types::{
+    ColumnDescriptorPtr, ColumnPath, SchemaDescriptor, SchemaDescriptorPtr,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RowGroupMetaData {

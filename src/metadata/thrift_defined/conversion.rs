@@ -1,6 +1,6 @@
 use super::*;
 use crate::errors::ParquetError;
-use crate::thrift_defined::parquet_format::{ColumnChunk, RowGroup};
+use crate::metadata::thrift_defined::parquet_format::{ColumnChunk, RowGroup};
 
 impl From<parquet_format::ConvertedType> for rosetta::ConvertedType {
     fn from(tp: parquet_format::ConvertedType) -> Self {

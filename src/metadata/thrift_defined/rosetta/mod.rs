@@ -3,9 +3,9 @@
 
 mod metadata;
 
-use crate::thrift_defined::parquet_format::TimeUnit;
-use crate::thrift_defined::SortingColumn;
-use crate::types::ParquetType;
+use super::parquet_format::TimeUnit;
+use super::SortingColumn;
+use crate::metadata::types::ParquetType;
 pub use metadata::*;
 
 /// Types supported by Parquet.  These types are intended to be used in combination

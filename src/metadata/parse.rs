@@ -1,5 +1,6 @@
+use super::types::ColumnDescriptor;
 use super::*;
-use crate::types::ColumnDescriptor;
+use crate::metadata::types::{from_thrift, SchemaDescriptor};
 use std::rc::Rc;
 
 fn decode_footer(footer: &[u8]) -> ParquetResult<usize> {

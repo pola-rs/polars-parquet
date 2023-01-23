@@ -1,9 +1,7 @@
+mod data;
 mod errors;
-mod metadata;
+pub(crate) mod metadata;
 mod reader;
-mod statistics;
-mod thrift_defined;
-mod types;
 
 pub(crate) static MAGIC_NUMBER: &[u8; 4] = b"PAR1";
 pub(crate) const FOOTER_SIZE: usize = 8;

@@ -1,6 +1,6 @@
+use super::thrift_defined::rosetta::*;
+use super::thrift_defined::*;
 use crate::errors::{ParquetError, ParquetResult};
-use crate::thrift_defined::rosetta::*;
-use crate::thrift_defined::*;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -196,7 +196,7 @@ fn build_tree<'a>(
     }
 }
 
-pub(super) fn from_thrift(elements: &[SchemaElement]) -> ParquetResult<ParquetType> {
+pub(crate) fn from_thrift(elements: &[SchemaElement]) -> ParquetResult<ParquetType> {
     let (index, parquet_type) = from_thrift_helper(elements, 0)?;
     if index != elements.len() {
         return Err(ParquetError::InvalidFormat(
