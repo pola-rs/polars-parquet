@@ -2,7 +2,11 @@ use crate::errors::{ParquetError, ParquetResult};
 use std::fs::File;
 use std::io::Read;
 
-pub trait ParquetReader: Send + Sync {
+pub trait ParquetReader: Send + Sync{
+    type Reader: Read;
+
+    fn get_reader(&self, start: usize, length: usize) -> ParquetResult<Self::Reader>;
+
     /// Get the length in bytes from the source
     fn len(&self) -> usize;
 
@@ -11,7 +15,17 @@ pub trait ParquetReader: Send + Sync {
     fn get_bytes(&self, start: usize, length: usize) -> ParquetResult<&[u8]>;
 }
 
-impl ParquetReader for &[u8] {
+impl<'a> ParquetReader for &'a [u8] {
+    type Reader = &'a [u8];
+
+    fn get_reader(&self, start: usize, length: usize) -> ParquetResult<Self::Reader> {
+        if start + length > self.len() {
+            Err(ParquetError::EOF)
+        } else {
+            Ok(&self[start..start + length])
+        }
+    }
+
     fn len(&self) -> usize {
         <[u8]>::len(self)
     }
@@ -22,15 +36,5 @@ impl ParquetReader for &[u8] {
         } else {
             Ok(&self[start..end])
         }
-    }
-}
-
-impl ParquetReader for Vec<u8> {
-    fn len(&self) -> usize {
-        self.as_slice().len()
-    }
-
-    fn get_bytes(&self, start: usize, length: usize) -> ParquetResult<&[u8]> {
-        self.get_bytes(start, length)
     }
 }

@@ -60,34 +60,34 @@ pub struct ColumnChunkMetaData {
     /// File where column data is stored.  If not set, assumed to be same file as
     /// metadata.  This path is relative to the current file.
     file_path: Option<String>,
-    file_offset: u64,
+    file_offset: usize,
     /// Compression codec
     pub compression: Compression,
     /// Number of values in this column
-    num_values: u64,
+    num_values: usize,
     /// total byte size of all uncompressed pages in this column chunk (including the headers)
-    total_uncompressed_size: u64,
+    total_uncompressed_size: usize,
     /// total byte size of all compressed, and potentially encrypted, pages
     /// in this column chunk (including the headers) *
-    total_compressed_size: u64,
+    total_compressed_size: usize,
     /// Byte offset from beginning of file to first data page
     /// Optional key/value metadata *
     pub key_value_metadata: Option<Vec<TKeyValue>>,
     /// Byte offset from beginning of file to first data page
-    data_page_offset: u64,
+    data_page_offset: usize,
     /// Byte offset from beginning of file to root index page
-    index_page_offset: Option<u64>,
+    index_page_offset: Option<usize>,
     /// Byte offset from the beginning of file to first (only) dictionary page
-    dictionary_page_offset: Option<u64>,
+    dictionary_page_offset: Option<usize>,
     /// Optional statistics for this column chunk
     statistics: Option<Statistics>,
     // Maybe add these later?
     // encoding_stats: Option<Vec<PageEncodingStats>>,
     // bloom_filter_offset: Option<i64>,
-    offset_index_offset: Option<u64>,
-    offset_index_length: Option<u64>,
-    column_index_offset: Option<u64>,
-    column_index_length: Option<u64>,
+    offset_index_offset: Option<usize>,
+    offset_index_length: Option<usize>,
+    column_index_offset: Option<usize>,
+    column_index_length: Option<usize>,
 }
 
 impl ColumnChunkMetaData {
@@ -130,7 +130,7 @@ impl ColumnChunkMetaData {
     }
 
     /// Get the offset and length of the column within the file.
-    pub(crate) fn byte_range(&self) -> (u64, u64) {
+    pub(crate) fn byte_range(&self) -> (usize, usize) {
         let start = self.dictionary_page_offset.unwrap_or(self.data_page_offset);
         let len = self.total_compressed_size;
         (start, len)

@@ -25,6 +25,6 @@ mod tests {
 
         let metadata = get_metadata(buf.as_slice()).unwrap();
 
-        read_row_group(&buf.as_slice(), &metadata.row_groups[0], 0);
+        read_row_group(buf.as_slice(), &metadata.row_groups[0], 0);
     }
 }

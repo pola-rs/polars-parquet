@@ -4,7 +4,7 @@ mod codec_zstd;
 use crate::errors::ParquetResult;
 use crate::metadata::Compression;
 
-pub(crate) trait Decompressor {
+pub(crate) trait Decompressor: Send {
     /// Decompresses data stored in slice `input` and appends output to `output`.
     ///
     /// If the uncompress_size is provided it will allocate the exact amount of memory.

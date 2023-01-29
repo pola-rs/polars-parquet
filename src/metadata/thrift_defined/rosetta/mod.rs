@@ -188,6 +188,7 @@ pub enum Encoding {
     ByteStreamSplit,
 }
 
+#[repr(u8)]
 pub enum PageType {
     DataPageV1,
     IndexPage,
