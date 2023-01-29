@@ -4,12 +4,12 @@ mod thrift_defined;
 pub mod types;
 
 use crate::errors::{ParquetError, ParquetResult};
-use crate::metadata::thrift_defined::*;
+pub(crate) use crate::metadata::thrift_defined::*;
 use crate::reader::ParquetReader;
 use crate::{FOOTER_SIZE, MAGIC_NUMBER};
 
 use thrift::protocol::{TCompactInputProtocol, TSerializable};
-pub use thrift_defined::RowGroupMetaData;
+pub use thrift_defined::rosetta::*;
 
 pub use parse::get_metadata;
 

@@ -11,9 +11,9 @@ pub trait ParquetReader: Send + Sync {
     fn get_bytes(&self, start: usize, length: usize) -> ParquetResult<&[u8]>;
 }
 
-impl ParquetReader for Vec<u8> {
+impl ParquetReader for &[u8] {
     fn len(&self) -> usize {
-        Vec::len(self)
+        <[u8]>::len(self)
     }
     fn get_bytes(&self, start: usize, length: usize) -> ParquetResult<&[u8]> {
         let end = start + length;
@@ -22,5 +22,15 @@ impl ParquetReader for Vec<u8> {
         } else {
             Ok(&self[start..end])
         }
+    }
+}
+
+impl ParquetReader for Vec<u8> {
+    fn len(&self) -> usize {
+        self.as_slice().len()
+    }
+
+    fn get_bytes(&self, start: usize, length: usize) -> ParquetResult<&[u8]> {
+        self.get_bytes(start, length)
     }
 }

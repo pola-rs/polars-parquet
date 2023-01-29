@@ -12,4 +12,7 @@ pub(crate) use parquet_format::{
     ColumnOrder as TColumnOrder, FileMetaData as ThriftFileMetaData, SchemaElement,
 };
 /// These autogen seem fine for now.
-pub use parquet_format::{KeyValue, SortingColumn};
+pub(crate) use parquet_format::{
+    KeyValue as TKeyValue, PageHeader as TPageHeader, PageLocation as TPageLocation,
+    SortingColumn as TSortingColumn,
+};

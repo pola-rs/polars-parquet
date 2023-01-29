@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 thrift = {version = "0.17", default-features = false}
+zstd = {version = "0.12", optional = true, default-features = false}

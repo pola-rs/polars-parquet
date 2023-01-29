@@ -4,7 +4,7 @@
 mod metadata;
 
 use super::parquet_format::TimeUnit;
-use super::SortingColumn;
+use super::*;
 use crate::metadata::types::ParquetType;
 pub use metadata::*;
 

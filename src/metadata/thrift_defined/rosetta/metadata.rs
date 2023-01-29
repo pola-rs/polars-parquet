@@ -2,7 +2,6 @@ use super::*;
 use crate::errors::{ParquetError, ParquetResult};
 use crate::metadata::statistics::Statistics;
 use crate::metadata::thrift_defined::parquet_format::{ColumnChunk, RowGroup};
-use crate::metadata::thrift_defined::KeyValue;
 use crate::metadata::types::{
     ColumnDescriptorPtr, ColumnPath, SchemaDescriptor, SchemaDescriptorPtr,
 };
@@ -18,7 +17,7 @@ pub struct RowGroupMetaData {
     pub num_rows: u64,
     /// If set, specifies a sort ordering of the rows in this RowGroup.
     /// The sorting columns can be a subset of all the columns.
-    pub sorting_columns: Option<Vec<SortingColumn>>,
+    pub sorting_columns: Option<Vec<TSortingColumn>>,
     /// Byte offset from beginning of file to first page (data or dictionary)
     /// in this row group *
     pub file_offset: Option<u64>,
@@ -50,21 +49,37 @@ impl RowGroupMetaData {
 /// Metadata for a column chunk.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ColumnChunkMetaData {
-    column_type: PhysicalType,
-    column_path: ColumnPath,
+    /// Type of this column
+    pub column_type: PhysicalType,
+    /// Path in schema *
+    path_in_schema: Vec<String>,
     column_descr: ColumnDescriptorPtr,
+    /// Set of all encodings used for this column. The purpose is to validate
+    /// whether we can decode those pages.
     encodings: Vec<Encoding>,
     /// File where column data is stored.  If not set, assumed to be same file as
     /// metadata.  This path is relative to the current file.
     file_path: Option<String>,
     file_offset: u64,
+    /// Compression codec
+    pub compression: Compression,
+    /// Number of values in this column
     num_values: u64,
-    compression: Compression,
-    total_compressed_size: u64,
+    /// total byte size of all uncompressed pages in this column chunk (including the headers)
     total_uncompressed_size: u64,
+    /// total byte size of all compressed, and potentially encrypted, pages
+    /// in this column chunk (including the headers) *
+    total_compressed_size: u64,
+    /// Byte offset from beginning of file to first data page
+    /// Optional key/value metadata *
+    pub key_value_metadata: Option<Vec<TKeyValue>>,
+    /// Byte offset from beginning of file to first data page
     data_page_offset: u64,
+    /// Byte offset from beginning of file to root index page
     index_page_offset: Option<u64>,
+    /// Byte offset from the beginning of file to first (only) dictionary page
     dictionary_page_offset: Option<u64>,
+    /// Optional statistics for this column chunk
     statistics: Option<Statistics>,
     // Maybe add these later?
     // encoding_stats: Option<Vec<PageEncodingStats>>,
@@ -83,9 +98,7 @@ impl ColumnChunkMetaData {
         if let Some(metatada) = cc.meta_data {
             Ok(ColumnChunkMetaData {
                 column_type: metatada.type_.try_into()?,
-                column_path: ColumnPath {
-                    parts: metatada.path_in_schema,
-                },
+                path_in_schema: metatada.path_in_schema,
                 column_descr,
                 encodings: metatada
                     .encodings
@@ -107,12 +120,20 @@ impl ColumnChunkMetaData {
                 offset_index_length: cc.offset_index_length.map(|v| v as _),
                 column_index_offset: cc.column_index_offset.map(|v| v as _),
                 column_index_length: cc.column_index_length.map(|v| v as _),
+                key_value_metadata: metatada.key_value_metadata,
             })
         } else {
             Err(ParquetError::InvalidFormat(
                 "Expected column metadata.".into(),
             ))
         }
+    }
+
+    /// Get the offset and length of the column within the file.
+    pub(crate) fn byte_range(&self) -> (u64, u64) {
+        let start = self.dictionary_page_offset.unwrap_or(self.data_page_offset);
+        let len = self.total_compressed_size;
+        (start, len)
     }
 }
 /// Metadata for a Parquet file.
@@ -121,7 +142,7 @@ pub struct FileMetaData {
     pub version: i32,
     pub num_rows: u64,
     pub created_by: Option<String>,
-    pub key_value_metadata: Option<Vec<KeyValue>>,
+    pub key_value_metadata: Option<Vec<TKeyValue>>,
     pub schema_descr: SchemaDescriptorPtr,
     pub column_orders: Option<Vec<ColumnOrder>>,
 }
