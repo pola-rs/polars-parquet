@@ -1,15 +1,15 @@
 use crate::compression::Decompressor;
 use crate::errors::{ParquetError, ParquetResult};
-use crate::metadata::statistics::Statistics;
-use crate::metadata::{Encoding, PhysicalType, TPageHeader};
+use crate::metadata::{Encoding, PageType, PhysicalType, Statistics, TPageHeader};
 use std::io::Read;
+use std::os::linux::raw::stat;
 use std::sync::Arc;
 use thrift::protocol::{TCompactInputProtocol, TSerializable};
 
 pub enum Page {
     Data {
         // TODO: maybe use Bytes crate
-        buf: Arc<Vec<u8>>,
+        buffer: Vec<u8>,
         num_values: u32,
         encoding: Encoding,
         def_level_encoding: Encoding,
@@ -17,7 +17,7 @@ pub enum Page {
         statistics: Option<Statistics>,
     },
     DataV2 {
-        buf: Arc<Vec<u8>>,
+        buffer: Vec<u8>,
         num_values: u32,
         encoding: Encoding,
         num_nulls: u32,
@@ -28,7 +28,7 @@ pub enum Page {
         statstics: Option<Statistics>,
     },
     Dictionary {
-        buf: Arc<Vec<u8>>,
+        buffer: Vec<u8>,
         num_values: u32,
         encoding: Encoding,
         is_sorted: bool,
@@ -36,11 +36,11 @@ pub enum Page {
 }
 
 impl Page {
-    pub fn buffer(&self) -> &Arc<Vec<u8>> {
+    pub fn buffer(&self) -> &[u8] {
         match self {
-            Page::Data { buf, .. } => buf,
-            Page::DataV2 { buf, .. } => buf,
-            Page::Dictionary { buf, .. } => buf,
+            Page::Data { buffer, .. } => buffer,
+            Page::DataV2 { buffer, .. } => buffer,
+            Page::Dictionary { buffer, .. } => buffer,
         }
     }
 }
@@ -107,5 +107,70 @@ pub(crate) fn decode_page(
     //
     // We always use 0 offset for other pages other than v2, `true` flag means
     // that compression will be applied if decompressor is defined
+
+    let (offset, can_decompress) = if let Some(header_v2) = &header.data_page_header_v2 {
+        let offset = (header_v2.definition_levels_byte_length
+            + header_v2.repetition_levels_byte_length) as usize;
+        let can_decompress = header_v2.is_compressed.unwrap_or(true);
+        (offset, can_decompress)
+    } else {
+        (0, true)
+    };
+
+    let buffer = match (decompressor, can_decompress) {
+        (Some(decompressor), true) => {
+            let uncompressed_size = header.uncompressed_page_size as usize;
+            let mut out = Vec::with_capacity(uncompressed_size);
+
+            let compressed_bytes = &input[offset..];
+
+            // the rep/def levels are written in first in case of v2 page
+            out.extend_from_slice(&input[..offset]);
+            decompressor.decompress(
+                compressed_bytes,
+                &mut out,
+                Some(uncompressed_size - offset),
+            )?;
+
+            if out.len() != uncompressed_size {
+                return Err(ParquetError::InvalidFormat(format!(
+                    "Actual decompressed size: {uncompressed_size} doesn't match the expected: {}",
+                    out.len()
+                )));
+            }
+            out
+        }
+        _ => input,
+    };
+
+    let page = match header.type_.into() {
+        PageType::DictionaryPage => {
+            let dict_header = header.dictionary_page_header.unwrap();
+            let is_sorted = dict_header.is_sorted.unwrap_or(false);
+            Page::Dictionary {
+                buffer,
+                num_values: dict_header.num_values as u32,
+                encoding: dict_header.encoding.try_into().unwrap(),
+                is_sorted,
+            }
+        }
+        PageType::DataPageV1 => {
+            let data_header = header.data_page_header.unwrap();
+            Page::Data {
+                buffer,
+                num_values: data_header.num_values as u32,
+                encoding: data_header.encoding.try_into().unwrap(),
+                def_level_encoding: data_header.definition_level_encoding.try_into().unwrap(),
+                rep_level_encoding: data_header.repetition_level_encoding.try_into().unwrap(),
+                statistics: data_header
+                    .statistics
+                    .map(|stats| Statistics::from_thrift(physical_type, stats))
+                    .transpose()?
+                    .flatten(),
+            }
+        }
+        _ => todo!(),
+    };
+
     todo!()
 }

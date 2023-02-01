@@ -2,7 +2,7 @@ use crate::errors::{ParquetError, ParquetResult};
 use std::fs::File;
 use std::io::Read;
 
-pub trait ParquetReader: Send + Sync{
+pub trait ParquetReader: Send + Sync {
     type Reader: Read;
 
     fn get_reader(&self, start: usize, length: usize) -> ParquetResult<Self::Reader>;

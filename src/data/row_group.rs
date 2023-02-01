@@ -33,11 +33,7 @@ enum PageReaderState {
 }
 
 impl<R: ParquetReader> SerPageReader<R> {
-    fn new(
-        reader: R,
-        metadata: &ColumnChunkMetaData,
-        total_rows: usize,
-    ) -> Self {
+    fn new(reader: R, metadata: &ColumnChunkMetaData, total_rows: usize) -> Self {
         let (offset, remaining_bytes) = metadata.byte_range();
         let state = PageReaderState::Values {
             offset,
@@ -78,7 +74,9 @@ impl<R: ParquetReader> PageReader for SerPageReader<R> {
                     }
                     dbg!(*offset, *remaining_bytes);
 
-                    let mut reader = self.reader.get_reader(*offset as usize, *remaining_bytes as usize)?;
+                    let mut reader = self
+                        .reader
+                        .get_reader(*offset as usize, *remaining_bytes as usize)?;
 
                     let header = next_page_header.take().map(Ok).unwrap_or_else(|| {
                         let (read, header) = read_page_header(&mut reader)?;
@@ -96,12 +94,11 @@ impl<R: ParquetReader> PageReader for SerPageReader<R> {
                     }
 
                     let mut buffer = Vec::with_capacity(data_len);
-                    let read = (&mut reader).take(data_len as u64).read_to_end(&mut buffer)?;
+                    let read = reader.take(data_len as u64).read_to_end(&mut buffer)?;
 
                     if data_len != read {
                         return Err(ParquetError::EOF);
                     }
-
 
                     dbg!(header);
 

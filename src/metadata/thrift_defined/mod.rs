@@ -14,5 +14,5 @@ pub(crate) use parquet_format::{
 /// These autogen seem fine for now.
 pub(crate) use parquet_format::{
     KeyValue as TKeyValue, PageHeader as TPageHeader, PageLocation as TPageLocation,
-    SortingColumn as TSortingColumn,
+    SortingColumn as TSortingColumn, Statistics as TStatistic,
 };

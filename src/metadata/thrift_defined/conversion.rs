@@ -110,26 +110,6 @@ impl TryFrom<parquet_format::Type> for rosetta::PhysicalType {
         Ok(out)
     }
 }
-impl TryFrom<parquet_format::PageType> for rosetta::PageType {
-    type Error = ParquetError;
-
-    fn try_from(value: parquet_format::PageType) -> Result<Self, Self::Error> {
-        use rosetta::PageType::*;
-        let out = match value.0 {
-            0 => DataPageV1,
-            1 => IndexPage,
-            2 => DictionaryPage,
-            3 => DataPageV2,
-            _ => {
-                return Err(ParquetError::InvalidFormat(
-                    "PageType value should be between 0-3.".into(),
-                ))
-            }
-        };
-
-        Ok(out)
-    }
-}
 
 impl TryFrom<parquet_format::CompressionCodec> for rosetta::Compression {
     type Error = ParquetError;
@@ -178,21 +158,10 @@ impl TryFrom<parquet_format::Encoding> for rosetta::Encoding {
     }
 }
 
-// impl From<parquet_format::RowGroup> for rosetta::RowGroupMetaData {
-//     fn from(value: parquet_format::RowGroup) -> Self {
-//         RowGroupMetaData {
-//             columns: value.columns.into_iter().map(|c| c.into()).collect(),
-//             total_byte_size: value.total_byte_size as _,
-//             num_rows: value.num_rows as _,
-//             sorting_columns: value.sorting_columns,
-//             file_offset: value.file_offset.map(|v| v as _),
-//             total_compressed_size: value.total_compressed_size.map(|v| v as _)
-//         }
-//     }
-// }
-//
-// impl From<ColumnChunk> for ColumnChunkMetaData {
-//     fn from(value: ColumnChunk) -> Self {
-//         todo!()
-//     }
-// }
+impl From<parquet_format::PageType> for rosetta::PageType {
+    fn from(value: parquet_format::PageType) -> Self {
+        let variant = value.0 as u8;
+        assert!(variant < 4);
+        unsafe { std::mem::transmute(variant) }
+    }
+}

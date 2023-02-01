@@ -2,6 +2,7 @@ mod compression;
 mod data;
 mod errors;
 pub(crate) mod metadata;
+mod physical;
 mod reader;
 
 pub(crate) static MAGIC_NUMBER: &[u8; 4] = b"PAR1";
